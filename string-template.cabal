@@ -1,0 +1,22 @@
+name:                string-template
+version:             0.0.1
+synopsis:            StringTemplate implementation in Haskell.
+description:         A port of the Java library by Terrence Parr.
+category:            Text
+license:             GPL
+license-file:        LICENSE
+author:              Joe Thornber
+maintainer:          joe.thornber@gmail.com
+Tested-With:         GHC == 6.12.1
+Build-Type:          Simple
+build-Depends:       base
+Cabal-Version:       >= 1.6
+
+library
+  build-depends:   base > 4, filepath, parsec < 3, containers, pretty, time, old-time, old-locale, bytestring, directory, array, text, utf8-string
+
+  exposed-modules:   Text.StringTemplate
+  other-modules:
+  ghc-options:       -Wall
+  if impl(ghc >= 6.8)
+    ghc-options:     -fwarn-tabs

@@ -1,0 +1,4 @@
+module Text.StringTemplate
+    (
+    ) where
+
