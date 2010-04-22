@@ -13,7 +13,7 @@ build-Depends:       base
 Cabal-Version:       >= 1.6
 
 library
-  build-depends:   base > 4, filepath, parsec < 3, containers, pretty, time, old-time, old-locale, bytestring, directory, array, text, utf8-string
+  build-depends:   base > 4, parsec > 3, containers > 0.3
 
   exposed-modules:   Text.StringTemplate
   other-modules:
