@@ -11,6 +11,10 @@ import Text.Parsec
 import Text.StringTemplate.ByteCode (Instruction (..), Code, Value (..))
 import qualified Text.StringTemplate.ByteCode as C
 
+import Test.Framework (testGroup, Test)
+import Test.Framework.Providers.HUnit
+import Test.HUnit hiding (Test)
+
 ----------------------------------------------------------------
 
 data ParseState = ParseState {
@@ -44,8 +48,8 @@ pushFrame = undefined
 popFrame :: Parser ()
 popFrame = undefined
 
-lookupFunction :: Parser Code
-lookupFunction = undefined
+lookupFunction :: String -> Parser Code
+lookupFunction _ = return S.empty
 
 ----------------------------------------------------------------
 -- Lexer
@@ -152,7 +156,7 @@ text = mkCode <$> many1Till anyChar ((lookAhead ldelim) <|> eof)
     mkCode t = S.fromList [C.LOAD_STR t, C.WRITE]
 
 exprTag :: Parser Code
-exprTag = delimit (mkCode <$> expr <*> optionMaybe (char ';' *> exprOptions))
+exprTag = delimit (mkCode <$> expr <*> optionMaybe (dchar ';' *> exprOptions))
   where
     mkCode e Nothing = e |> C.WRITE
     mkCode e (Just opts) = (e >< opts) |> C.WRITE_OPT
@@ -161,7 +165,7 @@ region :: Parser Code
 region = delimit (mkCode <$> (dchar '@' *> identifier))
   where
     mkCode :: String -> Code
-    mkCode n = undefined
+    mkCode _ = undefined
 
 subTemplate :: Parser Code
 subTemplate = undefined
@@ -243,23 +247,18 @@ memberExpr = mkInstr <$> callExpr <*> (many idOrMapExpr)
     toCode (Right c) = c |> C.LOAD_PROP_IND
 
 callExpr :: Parser Code
-callExpr = choice [ try (mk1 <$> identifier
-                             <*> parens expr)
-                  , mk2 <$> optionMaybe (literal "super" *> dot) 
-                        <*> identifier
-                        <*> parens (optionMaybe args)
-                  , mk3 <$> (dchar '@' *> optionMaybe (literal "super" *> dot))
-                        <*> identifier <* parens (optional whiteSpace)
+callExpr = choice [ try (do n <- identifier
+                            e <- parens expr
+                            f <- lookupFunction n
+                            return $ e >< f)
+                  , try (mk2 <$> optionMaybe (literal "super" *> dot) 
+                             <*> identifier
+                             <*> parens (optionMaybe args))
+                  , try (mk3 <$> (dchar '@' *> optionMaybe (literal "super" *> dot))
+                             <*> identifier <* parens (optional whiteSpace))
                   , primary
                   ]
   where
-    {-
-    mk1 n e = do
-      f <- lookupFunction e
-      return f
--}
-    mk1 = undefined
-
     mk2 Nothing n Nothing = S.singleton $ C.NEW n
     mk2 Nothing n (Just as) = C.NEW n <| as
     mk2 (Just _) n Nothing = S.singleton $ C.SUPER_NEW n
@@ -312,3 +311,41 @@ listElement :: Parser Code
 listElement = mk1 <$> exprNoComma
   where
     mk1 e = e |> C.ADD
+
+----------------------------------------------------------------
+
+pTest :: String -> Parser Code -> String -> [Instruction] -> Test
+pTest n p input expected = testCase n testFn
+  where
+    testFn = case runParser p (ParseState M.empty) "<test case>" input of
+      Left err -> assertFailure $ "parse error: " ++ show err
+      Right result -> assertEqual "" expected (toList result)
+      
+    toList s = case viewl s of
+      EmptyL -> []
+      x :< s' -> x : toList s'
+
+trim :: String -> String
+trim = reverse . tail . reverse . tail
+
+compilerTests :: Test
+compilerTests = testGroup "Compile tests" 
+                [ primaryTest "foo" [C.LOAD_ATTR "foo"]
+                , let str = "\"a string\"" in primaryTest str [C.LOAD_ATTR (trim str)]
+                , primaryTest "\"\"" [C.LOAD_ATTR ""]
+                  
+                , callExprTest "foo" [C.LOAD_ATTR "foo"]
+                  
+                  -- FIXME: function lookup broken
+                , callExprTest "foo(bar)" [C.LOAD_ATTR "bar", C.FAIL_COMPILE_TEST]
+                  
+                , callExprTest "foo()" [C.NEW "foo"]
+                , callExprTest "foo(bar)" [C.NEW "foo", C.LOAD_ATTR "bar"]
+                , callExprTest "super.foo()" [C.SUPER_NEW "foo"]
+                ]
+
+primaryTest :: String -> [Instruction] -> Test
+primaryTest = pTest "primary" primary
+
+callExprTest :: String -> [Instruction] -> Test
+callExprTest = pTest "callExpr" callExpr

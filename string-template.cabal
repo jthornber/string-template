@@ -13,7 +13,8 @@ build-Depends:       base
 Cabal-Version:       >= 1.6
 
 library
-  build-depends:   base > 4, parsec > 3, containers > 0.3
+  build-depends:   base > 4, parsec > 3, containers > 0.3, test-framework, test-framework-hunit,
+                   test-framework-quickcheck2, HUnit
 
   exposed-modules:   Text.StringTemplate
   other-modules:
@@ -25,4 +26,9 @@ Executable compile_template
   Main-is: CompileTemplate.hs
   Other-Modules: Text.StringTemplate
   build-depends:   base > 4, parsec > 3, containers > 0.3
+
+Executable run_tests
+  Main-is: Test.hs
+  Other-Modules: Text.StringTemplate
+  build-depends:   base > 4, parsec > 3, containers > 0.3, QuickCheck, test-framework-quickcheck2, HUnit
  

@@ -65,4 +65,5 @@ data Instruction = LOAD_STR String
                  | NEWLINE
                  | NOOP
                  | POP
+                 | FAIL_COMPILE_TEST
                     deriving (Show, Eq)
