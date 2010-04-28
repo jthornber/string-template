@@ -35,7 +35,6 @@ data VMFrame = VMFrame
     , attrs :: Map String Attribute
     , programCounter :: Int
     , instructions :: Code
-    , stack :: [Value]
     , passThrough :: Bool
     }
 
@@ -44,12 +43,12 @@ newFrame c a = VMFrame { halted = False
                        , attrs = M.fromList a
                        , programCounter = 0
                        , instructions = c
-                       , stack = []
                        , passThrough = False
                        }
 
 data VMContext = VMContext
     { frames :: [VMFrame]
+    , stack :: [Value]
     , results :: [String]
     }
 
@@ -89,16 +88,15 @@ isHalted = halted' <$> topFrame
       halted' f = programCounter f >= (S.length . instructions $ f)
 
 push :: Value -> VM ()
-push v = modifyTopFrame $ \s -> s { stack = v : stack s }
+push v = modify $ \c -> c { stack = v : stack c }
 
 peek :: VM Value
-peek = do
-  (head . stack) <$> topFrame
+peek = (head . stack) <$> get
 
 pop :: VM Value
 pop = do
   v <- peek
-  modifyTopFrame $ \f -> f { stack = tail . stack $ f }
+  modify $ \c -> c { stack = tail . stack $ c }
   return v
 
 popPair :: VM (Value, Value)
@@ -185,6 +183,7 @@ interpret c attrs = concat . reverse . results . execState run $ context
     where
       run = step `untilM` isHalted
       context = VMContext { frames = [ newFrame c attrs ]
+                          , stack = []
                           , results = []
                           }
 
