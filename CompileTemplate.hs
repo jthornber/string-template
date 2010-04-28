@@ -20,8 +20,8 @@ main = do
   when (length args /= 1) usage
   let file = head args
   txt <- readFile file
-  case runParser templateAndEOF (ParseState M.empty) file txt of
+  case parse group file txt of
     Left errs -> do
       putStrLn $ show errs
       exitWith $ ExitFailure 1
-    Right code -> putStr $ ppCode code
+    Right g -> print g

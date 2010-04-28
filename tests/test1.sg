@@ -1,0 +1,25 @@
+foo() ::= "Hello, world!"
+
+bar() ::= <<
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Proin
+elementum, massa a tempor dapibus, ante sapien volutpat tellus, a
+vestibulum dui urna in velit. Duis sagittis pharetra dolor, et iaculis
+arcu venenatis et. Nulla quis metus elit, non euismod massa. Proin
+tincidunt gravida elit, quis molestie arcu feugiat vel. Quisque mattis
+viverra risus vel malesuada. Nunc hendrerit euismod purus aliquam
+porttitor. Curabitur porttitor tellus sit amet turpis interdum
+laoreet. Etiam congue mattis adipiscing. Nulla facilisi. Nunc vel mi
+sed eros blandit laoreet. In sit amet odio augue, quis tristique
+arcu. Quisque adipiscing, urna sed lacinia scelerisque, dolor sem
+pulvinar orci, quis volutpat felis tellus ut est. Proin ut mi
+nibh. Proin vulputate ligula eu risus tempus sed bibendum dolor
+placerat. Donec facilisis, sapien a congue sagittis, ante velit
+laoreet nunc, eget congue sem ligula vel quam. Etiam auctor varius
+augue et ultricies. Proin quis varius eros. In ac turpis eget lacus
+venenatis dignissim. Vestibulum quis sem tincidunt justo vestibulum
+dictum.
+>>
+
+hux() ::= <<
+<foo()>
+>>

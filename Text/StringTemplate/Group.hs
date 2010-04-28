@@ -12,6 +12,8 @@ import Control.Applicative hiding (many, optional)
 import Data.Map (Map)
 import qualified Data.Map as M
 
+import Debug.Trace
+
 import Text.Parsec hiding ((<|>))
 import Text.Parsec.Char
 import Text.Parsec.String
@@ -19,24 +21,27 @@ import Text.Parsec.String
 import Text.StringTemplate.ByteCode
 import Text.StringTemplate.Compiler
 
+traceIt x = trace (show x) x
+
 data Dictionary = Dictionary { pairs :: [(String, String)]
                              , defaultValue :: Maybe String
-                             }
+                             } deriving (Show)
 
-data FormalArg = FormalArg String (Maybe String)
+data FormalArg = FormalArg String (Maybe String) deriving (Show)
 
 data TemplateDef = TemplateDef { name :: String
                                , args :: [FormalArg]
                                , instructions :: Code
-                               }
+                               } deriving (Show)
 
-data DictionaryDef = DictionaryDef String Dictionary
+data DictionaryDef = DictionaryDef String Dictionary deriving (Show)
 
 data Definition = DTemplate TemplateDef
                 | DDictionary DictionaryDef
+                  deriving (Show)
 
 group :: Parser [Definition]
-group = many1 def
+group = optional whiteSpace *> many1 (lexeme def)
 
 def :: Parser Definition
 def = (DTemplate <$> templateDef) <|> (DDictionary <$> dictDef)
@@ -102,7 +107,6 @@ string' = char '"' *> manyTill (escapedChar <|> noneOf "\"") (try $ char '"')
       decode 't' = '\t'
       decode c   = c
 
-
 bigString :: Parser String
 bigString = string "<<" *> manyTill qChar (try $ string ">>")
   where
@@ -114,12 +118,12 @@ anonymousTemplate = concat <$> (char '{' *> manyTill charOrBraces (char '}'))
     charOrBraces = (many1 $ noneOf "{") <|> anonymousTemplate
 
 comment :: Parser ()
-comment = discard comment'
+comment = discard comment' <?> "comment"
   where
     comment' = string "/*" *> manyTill anyChar (try $ string "*/")
 
 lineComment :: Parser ()
-lineComment = discard comment'
+lineComment = discard comment' <?> "line comment"
   where
     comment' = discard (string "//" *> manyTill anyChar (try (discard newline) <|> eof))
 
@@ -127,7 +131,7 @@ newLine :: Parser ()
 newLine = ((try $ discard . string $ "\r\n") <|> (discard $ char '\n'))
 
 whiteSpace :: Parser ()
-whiteSpace = discard $ oneOf " \r\t\n"
+whiteSpace = (discard $ many1 (oneOf " \r\t\n")) <?> "whitespace"
 
 discard :: Parser a -> Parser ()
 discard p = p >> return ()
@@ -136,7 +140,7 @@ is :: Parser ()
 is = discard (lexeme $ string "::=")
 
 dchar :: Char -> Parser ()
-dchar c = char c *> optional whiteSpace *> return ()
+dchar c = lexeme (char c) *> return ()
 
 comma :: Parser ()
 comma = dchar ','
