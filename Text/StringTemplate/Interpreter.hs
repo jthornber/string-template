@@ -19,11 +19,15 @@ import Text.StringTemplate.ByteCode
 
 ----------------------------------------------------------------
 -- FIXME: interpreter needs a locale for the renders
-type Value = Maybe Attribute
+data Value = VNull
+           | VAttr Attribute
+           | VFrame VMFrame
+             deriving (Show)
 
 showValue :: Value -> String
-showValue Nothing = ""
-showValue (Just a) = showAttr a
+showValue VNull = ""
+showValue (VAttr a) = showAttr a
+showValue (VFrame _) = "<frame>"
 
 showAttr :: Attribute -> String
 showAttr (AString s) = s
@@ -35,7 +39,7 @@ data VMFrame = VMFrame
     , programCounter :: Int
     , instructions :: Code
     , passThrough :: Bool
-    }
+    } deriving (Show)
 
 newFrame :: Code -> [(String, Attribute)] -> VMFrame
 newFrame c a = VMFrame { attrs = M.fromList a
@@ -105,19 +109,20 @@ popMany 0 = return []
 popMany n = (:) <$> pop <*> popMany (n - 1)
 
 lookupFull :: String -> VM Value
-lookupFull nm = (lookup' . frames) <$> get
+lookupFull nm = (maybe VNull VAttr . lookup' . frames) <$> get
     where
       lookup' [] = Nothing
       lookup' (f:fs) = maybe (lookup' fs) Just (M.lookup nm (attrs f))
 
 lookupLocal :: String -> VM Value
-lookupLocal nm = lookup' <$> topFrame
+lookupLocal nm = (maybe VNull VAttr . lookup') <$> topFrame
     where
       lookup' = M.lookup nm . attrs
 
 setAttribute :: String -> Value -> VM ()
-setAttribute _ Nothing  = runtimeError "bad attribute value"
-setAttribute n (Just a) = modifyTopFrame $ \f -> f { attrs = M.insert n a (attrs f) }
+setAttribute _ VNull = runtimeError "bad attribute value"
+setAttribute n (VAttr a) = modifyTopFrame $ \f -> f { attrs = M.insert n a (attrs f) }
+setAttribute n (VFrame f) = runtimeError "is this possible?"
 
 setPassThrough :: Bool -> VM ()
 setPassThrough b = modifyTopFrame $ \f -> f { passThrough = b }
@@ -140,7 +145,7 @@ runtimeError :: String -> a
 runtimeError = error
 
 getProperty :: String -> Value -> VM Value
-getProperty n (Just (AProp m)) = return (M.lookup n m)
+getProperty n (VAttr (AProp m)) = return $ maybe VNull VAttr (M.lookup n m)
 getProperty _ _ = runtimeError "bad property"
 
 setSoleAttribute = undefined
@@ -153,13 +158,13 @@ stLookup = undefined
 toString = undefined
 
 asList :: Value -> [Attribute]
-asList Nothing = []
-asList (Just (AList as)) = as
+asList VNull = []
+asList (VAttr (AList as)) = as
 asList _ = runtimeError "what do we do here ?"
 
 asString :: Value -> String
-asString Nothing = ""
-asString (Just a) = asString' a
+asString VNull = ""
+asString (VAttr a) = asString' a
 
 asString' (AString s) = s
 asString' (AList as)  = concatMap asString' as
@@ -190,12 +195,12 @@ step :: VM ()
 step = do
   i <- getInstruction
   case i of
-    LOAD_STR txt   -> push (Just $ AString txt)
+    LOAD_STR txt   -> push (VAttr $ AString txt)
     LOAD_ATTR txt  -> lookupFull txt >>= push
     LOAD_LOCAL txt -> lookupLocal txt >>= push
     LOAD_PROP prop -> pop >>= getProperty prop >>= push
     LOAD_PROP_IND  -> do
-      (Just (AString prop)) <- pop
+      (VAttr (AString prop)) <- pop
       o <- pop
       getProperty prop o >>= push
 
@@ -214,18 +219,18 @@ step = do
     BR n           -> incPC (n - 1)
     BRF n          -> pop >>= \v -> if (testAttribute $ v) then return () else incPC (n - 1)
     OPTIONS        -> undefined
-    LIST           -> push (Just . AList $ [])
+    LIST           -> push (VAttr . AList $ [])
     ADD            -> popPair >>= push . uncurry (consAttr)
     TOSTR          -> modifyTop toString
-    FIRST          -> modifyTop $ Just . head . asList
-    LAST           -> modifyTop $ Just . head . reverse . asList
-    REST           -> modifyTop $ Just . AList . tail . asList
+    FIRST          -> modifyTop $ VAttr . head . asList
+    LAST           -> modifyTop $ VAttr . head . reverse . asList
+    REST           -> modifyTop $ VAttr . AList . tail . asList
     TRUNC          -> modifyTop trunc
     STRIP          -> modifyTop strip
     TRIM           -> modifyTop trim
-    LENGTH         -> modifyTop $ Just . AString . show . length . asList
-    STRLEN         -> modifyTop $ Just . AString . show . length . asString
-    REVERSE        -> modifyTop $ Just . AList . reverse . asList
+    LENGTH         -> modifyTop $ VAttr . AString . show . length . asList
+    STRLEN         -> modifyTop $ VAttr . AString . show . length . asString
+    REVERSE        -> modifyTop $ VAttr . AList . reverse . asList
     NOT            -> modifyTop $ notValue . testAttribute
     OR             -> popPair >>= push . uncurry vOr
     AND            -> popPair >>= push . uncurry vAnd
