@@ -1,7 +1,7 @@
-foo() ::= "Joe"
+foo(arg1 = "blip", arg2, arg3 = "0") ::= "Joe"
 
 bar() ::= <<
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Proin
+  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Proin
 elementum, massa a tempor dapibus, ante sapien volutpat tellus, a
 vestibulum dui urna in velit. Duis sagittis pharetra dolor, et iaculis
 arcu venenatis et. Nulla quis metus elit, non euismod massa. Proin

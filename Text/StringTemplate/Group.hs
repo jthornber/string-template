@@ -108,7 +108,7 @@ string' = char '"' *> manyTill (escapedChar <|> noneOf "\"") (try $ char '"')
       decode c   = c
 
 bigString :: Parser String
-bigString = string "<<" *> manyTill qChar (try $ string ">>")
+bigString = string "<<" *> restOfLine *> manyTill qChar (try $ string ">>")
   where
     qChar = anyChar             -- FIXME: finish
 
@@ -132,6 +132,9 @@ newLine = ((try $ discard . string $ "\r\n") <|> (discard $ char '\n'))
 
 whiteSpace :: Parser ()
 whiteSpace = (discard $ many1 (oneOf " \r\t\n")) <?> "whitespace"
+
+restOfLine :: Parser ()
+restOfLine = discard (many (oneOf " \r") *> char '\n')
 
 discard :: Parser a -> Parser ()
 discard p = p >> return ()
