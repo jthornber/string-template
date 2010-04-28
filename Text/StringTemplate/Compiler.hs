@@ -65,10 +65,10 @@ lexeme :: Parser a -> Parser a
 lexeme p = p <* whiteSpace
 
 ldelim :: Char
-ldelim = '<'
+ldelim = '$'
 
 rdelim :: Char
-rdelim = '>'
+rdelim = '$'
 
 brak :: Char -> Char -> Parser a -> Parser a
 brak l r = between (dchar l) (dchar r)
