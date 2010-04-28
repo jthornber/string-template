@@ -1,6 +1,5 @@
 module Text.StringTemplate.ByteCode
-    ( Value (..)
-    , Code
+    ( Code
     , ppCode
     , Instruction (..)
     ) where
@@ -16,14 +15,6 @@ ppCode :: Code -> String
 ppCode code = fold (showLn <$> code)
   where
     showLn = (++ "\n") . show
-
-data Value = VString String
-           | VNull              -- FIXME: Not sure this is needed, it
-                                -- would be nice if this nastiness was
-                                -- all contained within the
-                                -- interpreter.
-           | VAttr Attribute
-           | VTemplate Code
 
 data Instruction = LOAD_STR String
                  | LOAD_ATTR String

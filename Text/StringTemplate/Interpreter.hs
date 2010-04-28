@@ -1,62 +1,111 @@
-module Text.StringTemplate.Interpreter 
+{-# LANGUAGE TypeSynonymInstances #-}
+module Text.StringTemplate.Interpreter
        where
 
-import Attribute
-import ByteCode
+import Control.Applicative
 import Control.Monad.Loops
 import Control.Monad.State.Strict
+import Data.Map (Map)
+import qualified Data.Map as M
 import Data.Sequence (Seq)
 import qualified Data.Sequence as S
 
-----------------------------------------------------------------
--- FIXME: move somewhere else
-data Template = Template {
-      code :: InstrSeq
-    } deriving (Show)
+import Test.Framework (testGroup, Test)
+import Test.Framework.Providers.HUnit
+import Test.HUnit hiding (Test, State)
+
+import Text.StringTemplate.Attribute
+import Text.StringTemplate.ByteCode
 
 ----------------------------------------------------------------
 -- FIXME: interpreter needs a locale for the renders
-data VMFrame = VMFrame {
-      halted :: Bool            -- FIXME: I don't think this should be here
+data Value = VString String
+           | VNull
+           | VAttr Attribute
+           | VTemplate Code
+             deriving (Show)
 
-      attrs :: String -> Maybe Attr
-      programCounter :: Int
-      instructions :: InstrSeq
-      stack :: [OperandValue]
-      passThrough :: Bool
+showValue :: Value -> String
+showValue (VString s) = s
+showValue VNull = ""
+showValue (VAttr a) = showAttr a
+showValue (VTemplate _) = "<template code, arrrggg>"
+
+showAttr :: Attribute -> String
+showAttr (ASimple s) = s
+showAttr (AList xs) = concatMap showAttr xs
+showAttr (AProp m) = "<properties here>" -- FIXME: finish
+
+data VMFrame = VMFrame
+    { halted :: Bool            -- FIXME: I don't think this should be here
+    , attrs :: Map String Attribute
+    , programCounter :: Int
+    , instructions :: Code
+    , stack :: [Value]
+    , passThrough :: Bool
     }
 
-newFrame :: Template -> VMFrame
-newFrame = undefined
+newFrame :: Code -> [(String, Attribute)] -> VMFrame
+newFrame c a = VMFrame { halted = False
+                       , attrs = M.fromList a
+                       , programCounter = 0
+                       , instructions = c
+                       , stack = []
+                       , passThrough = False
+                       }
+
+data VMContext = VMContext
+    { frames :: [VMFrame]
+    , results :: [String]
+    }
 
 -- FIXME: Use WriterT for output
-type VM = State [VMFrame]
+type VM = State VMContext
+
+instance Applicative VM where
+    pure = return
+    fn <*> fa = unwrapMonad (WrapMonad fn <*> WrapMonad fa)
 
 ----------------------------------------------------------------
 -- Microcode
+topFrame :: VM VMFrame
+topFrame = (head . frames) <$> get
+
+modifyTopFrame :: (VMFrame -> VMFrame) -> VM ()
+modifyTopFrame fn = do
+  c <- get
+  let fs = frames c
+  put $ c { frames = (fn . head $ fs) : tail fs }
+
 getInstruction :: VM Instruction
 getInstruction = do
-  s <- get
-  c <- code s
-  return . index c . programCounter $ s
+  f <- topFrame
+  let c = instructions f
+  return . S.index c . programCounter $ f
 
 next :: VM ()
-next = modify $ \s -> s { programCounter = succ . programCounter $ s }
+next = modifyTopFrame $ \s -> s { programCounter = succ . programCounter $ s }
 
-setPC :: Int -> VM ()
-setPC pc = modify $ \s -> s { programCounter = pc }
+incPC :: Int -> VM ()
+incPC pc = modifyTopFrame $ \s -> s { programCounter = programCounter s + pc }
 
 isHalted :: VM Bool
-isHalted = get >>= halted
+isHalted = halted' <$> topFrame
+    where
+      halted' f = programCounter f >= (S.length . instructions $ f)
 
 push :: Value -> VM ()
-push v = modify $ \s -> s { stack = v : stack s }
+push v = modifyTopFrame $ \s -> s { stack = v : stack s }
+
+peek :: VM Value
+peek = do
+  (head . stack) <$> topFrame
 
 pop :: VM Value
-pop i = do
-  s <- get
-  v = head . stack $ s
-  set $ s { stack = tail . stack $ s }
+pop = do
+  v <- peek
+  modifyTopFrame $ \f -> f { stack = tail . stack $ f }
+  return v
 
 popPair :: VM (Value, Value)
 popPair = (,) <$> pop <*> pop
@@ -65,22 +114,25 @@ popMany :: Int -> VM [Value]
 popMany 0 = return []
 popMany n = (:) <$> pop <*> popMany (n - 1)
 
-lookupFull :: String -> VM Attribute
-lookupFull nm = undefined
+lookupFull :: String -> VM Value
+lookupFull nm = (lookup' . frames) <$> get
+    where
+      lookup' [] = VNull
+      lookup' (f:fs) = maybe (lookup' fs) VAttr (M.lookup nm (attrs f))
 
-lookupLocal :: String -> VM Attribute
-lookupLocal nm = undefined
+lookupLocal :: String -> VM Value
+lookupLocal nm = lookup' <$> topFrame
+    where
+      lookup' = maybe VNull VAttr . M.lookup nm . attrs
 
-setAttribute :: Value -> Value -> VM ()
-setAttribute nm templ v = undefined
+setAttribute :: String -> Value -> VM ()
+setAttribute = undefined -- nm templ v = undefined
 
 setPassThrough :: Bool -> VM ()
-setPassThrough b = do
-  s <- get
-  set $ s { passThrough = b }
+setPassThrough b = modifyTopFrame $ \f -> f { passThrough = b }
 
 writeValue :: Value -> VM ()
-writeValue = undefined
+writeValue v = modify $ \c -> c { results = showValue v : results c }
 
 mapAttr :: Value -> Value -> VM ()
 mapAttr attr templ = undefined
@@ -92,138 +144,131 @@ rotMap tmpls v = undefined
 modifyTop :: (Value -> Value) -> VM ()
 modifyTop fn = pop >>= push . fn >> next
 
+getProperty = undefined
+setSoleAttribute = undefined
+pushIndentation = undefined
+popIndentation = undefined
+notValue = undefined
+testAttribute = undefined
+newTemplate = undefined
+stLookup = undefined
+toString = undefined
+
+asList :: Value -> [Attribute]
+asList = undefined
+
+trunc = undefined
+trim = undefined
+strip = undefined
+asString = undefined
+consAttr = undefined
+vOr = undefined
+vAnd = undefined
+
 ----------------------------------------------------------------
 -- Interpreter
 
-interpret :: Template -> [(String, Attribute)] -> String
-interpret t attrs = concat . results . execState run $ newFrame t attrs
+-- FIXME: make this return an Either, there must be error conditions
+interpret :: Code -> [(String, Attribute)] -> String
+interpret c attrs = concat . reverse . results . execState run $ context
     where
       run = step `untilM` isHalted
+      context = VMContext { frames = [ newFrame c attrs ]
+                          , results = []
+                          }
 
 -- FIXME: we need some cast operators like asString, asInt, asAttr etc.
--- FIXME: also need an Attr class
 step :: VM ()
 step = do
   i <- getInstruction
   case i of
-    OP_LOAD_STR txt ->
-        push txt >> next
-
-    OP_LOAD_ATTR txt ->
-        lookupFull txt >>= push >> next
-
-    OP_LOAD_LOCAL txt ->
-        lookupLocal txt >>= push >> next
-
-    OP_LOAD_PROP prop ->
-        lookupFull txt >>= getProperty prop >>= push >> next
-
-    OP_LOAD_PROP_IND ->
-        popPair >>= uncurry getProperty >>= push >> next
-
-    OP_STORE_ATTR nm ->
-        popPair >>= uncurry (setAttribute nm) >> next
-
-    OP_STORE_SOLE_ARG ->
-        popPair >>= uncurry setSoleAttribute >> next
-
-    OP_SET_PASS_THRU ->
-        setPassThrough True >> next
-
-    OP_STORE_OPTION ->
-        undefined >> next
-
-    OP_NEW tmpl ->
-        newTemplate tmpl >>= push >> next
-
-    OP_NEW_IND ->
-        pop >>= newTemplate >>= push >> next
-
-    OP_SUPER_NEW ->
-        pop >>= stLookup >>= newTemplate >>= push >> next
-
-    OP_WRITE ->
-        pop >>= writeValue >> next
-
-    OP_WRITE_OPT ->
-        pop >>= writeValue >> next -- FIXME: finish
-
-    OP_MAP ->
-        popPair >>= mapAttr >> next
-
-    OP_ROT_MAP n ->
-        ((,) <$> popMany <*> pop) >>= uncurry rotMap >> next
-
-    OP_PAR_MAP n ->
-        pop >>= undefined >> next
-
-    OP_BR n ->
-        setPC n
-
-    OP_BRF pc ->
-        pop >>= \v -> if (testAttribute $ v) then next else setPC n
-
-    OP_OPTIONS ->
-        undefined >> next
-
-    OP_LIST ->
-        (pure $ VList []) >>= push >> next
-
-    OP_ADD ->
-        popPair >>= push . uncurry (:) >> next
-
-    OP_TOSTR ->
-        modifyTop toString
-
-    OP_FIRST ->
-        modifyTop $ head . asList
-
-    OP_LAST ->
-        modifyTop $ head . reverse . asList
-
-    OP_REST ->
-        modifyTop $ tail . asList
-
-    OP_TRUNC ->
-        modifyTop trunc
-
-    OP_STRIP ->
-        modifyTop strip
-
-    OP_TRIM ->
-        modifyTop trim
-
-    OP_LENGTH ->
-        modifyTop $ length . asList
-
-    OP_STRLEN ->
-        modifyTop $ length . asString
-
-    OP_REVERSE ->
-        modifyTop $ reverse . asList
-
-    OP_NOT ->
-        modifyTop $ notValue . testAttribute
-
-    OP_OR ->
-        popPair >>= push . uncurry (||) >> next
-
-    OP_AND ->
-        popPair >>= push . uncurry (&&) >> next
-
-    OP_INDENT txt ->
-        pushIndentation txt >> next
-
-    OP_DEDENT ->
-        popIndentation >> next
-
-    OP_NEWLINE ->
-        undefined >> next
-
-    OP_NOOP ->
-        next
-
-    OP_POP ->
-        pop >> next
+    LOAD_STR txt   -> push (VString txt) >> next
+    LOAD_ATTR txt  -> lookupFull txt >>= push >> next
+    LOAD_LOCAL txt -> lookupLocal txt >>= push >> next
+    LOAD_PROP prop -> undefined -- lookupFull txt >>= getProperty prop >>= push >> next
+    LOAD_PROP_IND  -> popPair >>= uncurry getProperty >>= push >> next
+    STORE_ATTR nm  -> pop >>= setAttribute nm >> next
+    STORE_SOLE_ARG -> popPair >>= uncurry setSoleAttribute >> next
+    SET_PASS_THRU  -> setPassThrough True >> next
+    STORE_OPTION o -> undefined >> next
+    NEW tmpl       -> newTemplate tmpl >>= push >> next
+    NEW_IND        -> pop >>= newTemplate >>= push >> next
+    SUPER_NEW t    -> pop >>= stLookup >>= newTemplate >>= push >> next
+    WRITE          -> pop >>= writeValue >> next
+    WRITE_OPT      -> pop >>= writeValue >> next -- FIXME: finish
+    MAP            -> popPair >>= uncurry mapAttr >> next
+    ROT_MAP        -> ((,) <$> popMany 1 <*> pop) >>= uncurry rotMap >> next -- FIXME: broken
+    PAR_MAP        -> pop >>= undefined >> next
+    BR n           -> incPC n
+    BRF n          -> pop >>= \v -> if (testAttribute $ v) then next else incPC n
+    OPTIONS        -> undefined >> next
+    LIST           -> push (VAttr . AList $ []) >> next
+    ADD            -> popPair >>= push . uncurry (consAttr) >> next
+    TOSTR          -> modifyTop toString
+    FIRST          -> modifyTop $ VAttr . head . asList
+    LAST           -> modifyTop $ VAttr . head . reverse . asList
+    REST           -> modifyTop $ VAttr . AList . tail . asList
+    TRUNC          -> modifyTop trunc
+    STRIP          -> modifyTop strip
+    TRIM           -> modifyTop trim
+    LENGTH         -> modifyTop $ VString . show . length . asList
+    STRLEN         -> modifyTop $ VString . show . length . asString
+    REVERSE        -> modifyTop $ VAttr . AList . reverse . asList
+    NOT            -> modifyTop $ notValue . testAttribute
+    OR             -> popPair >>= push . uncurry vOr >> next
+    AND            -> popPair >>= push . uncurry vAnd >> next
+    INDENT txt     -> pushIndentation txt >> next
+    DEDENT         -> popIndentation >> next
+    NEWLINE        -> undefined >> next
+    NOOP           -> next
+    POP            -> pop >> next
 
 ----------------------------------------------------------------
+-- Tests
+run :: String -> [Instruction] -> [(String, Attribute)] -> String -> Test
+run d c attrs expected = testCase d a
+    where
+      a = assertEqual "template output" expected actual
+      actual = interpret (S.fromList $ c) attrs
+
+interpreterTests :: Test
+interpreterTests = testGroup "Interpreter tests"
+                   [ run "load str 1" [LOAD_STR "hello", WRITE] [] "hello"
+                   , run "load str 2"
+                             [ LOAD_STR "hello"
+                             , WRITE
+                             , LOAD_STR ", world!"
+                             , WRITE
+                             ]
+                             []
+                             "hello, world!"
+
+                   , run "load_attr 1"
+                         [ LOAD_ATTR "foo"
+                         , WRITE
+                         ]
+                         [ ("foo", ASimple "hello") ]
+                         "hello"
+                   , run "load_attr 2"
+                         [ LOAD_ATTR "foo"
+                         , WRITE
+                         ]
+                         []
+                         ""
+                   -- FIXME: add tests that have several frames
+
+                   , run "load_local 1"
+                         [ LOAD_LOCAL "foo"
+                         , WRITE
+                         ]
+                         [ ("foo", ASimple "hello") ]
+                         "hello"
+                   , run "load_local 2"
+                         [ LOAD_LOCAL "foo"
+                         , WRITE
+                         ]
+                         []
+                         ""
+                   ]
+
+
