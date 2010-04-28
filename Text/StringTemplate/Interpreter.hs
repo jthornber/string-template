@@ -120,7 +120,8 @@ lookupLocal nm = lookup' <$> topFrame
       lookup' = M.lookup nm . attrs
 
 setAttribute :: String -> Value -> VM ()
-setAttribute = undefined -- nm templ v = undefined
+setAttribute _ Nothing  = runtimeError "bad attribute value"
+setAttribute n (Just a) = modifyTopFrame $ \f -> f { attrs = M.insert n a (attrs f) }
 
 setPassThrough :: Bool -> VM ()
 setPassThrough b = modifyTopFrame $ \f -> f { passThrough = b }
@@ -309,6 +310,16 @@ interpreterTests = testGroup "Interpreter tests"
                          ]
                          [ ("foo", AProp . M.fromList $ [("count", AString "hello")])
                          ]
+                         "hello"
+                         
+                   , run "store_attr 1"
+                         [ LOAD_STR "hello"
+                         , STORE_ATTR "foo"
+                         , LOAD_STR "barf"
+                         , LOAD_ATTR "foo"
+                         , WRITE
+                         ]
+                         []
                          "hello"
                    ]
 
