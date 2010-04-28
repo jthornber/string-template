@@ -1,8 +1,4 @@
-import Test.Framework (defaultMain, testGroup)
-import Test.Framework.Providers.HUnit
-
-import Test.QuickCheck
-import Test.HUnit
+import Test.Framework (defaultMain)
 
 import Text.StringTemplate.Compiler (compilerTests)
 import Text.StringTemplate.Interpreter (interpreterTests)
