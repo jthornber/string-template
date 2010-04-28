@@ -51,6 +51,7 @@ newFrame c a = VMFrame { attrs = M.fromList a
 data VMContext = VMContext
     { frames :: [VMFrame]
     , stack :: [Value]
+    , templates :: Map String Code
     , results :: [String]
     }
 
@@ -119,10 +120,8 @@ lookupLocal nm = (maybe VNull VAttr . lookup') <$> topFrame
     where
       lookup' = M.lookup nm . attrs
 
-setAttribute :: String -> Value -> VM ()
-setAttribute _ VNull = runtimeError "bad attribute value"
-setAttribute n (VAttr a) = modifyTopFrame $ \f -> f { attrs = M.insert n a (attrs f) }
-setAttribute n (VFrame f) = runtimeError "is this possible?"
+setAttribute :: String -> VMFrame -> Attribute -> VMFrame
+setAttribute n f a = f { attrs = M.insert n a (attrs f) }
 
 setPassThrough :: Bool -> VM ()
 setPassThrough b = modifyTopFrame $ \f -> f { passThrough = b }
@@ -153,7 +152,12 @@ pushIndentation = undefined
 popIndentation = undefined
 notValue = undefined
 testAttribute = undefined
-newTemplate = undefined
+
+newTemplate :: String -> VM Value
+newTemplate n = do
+  c <- get
+  return $ maybe VNull (VFrame . (\c -> newFrame c [])) (M.lookup n (templates c))
+  
 stLookup = undefined
 toString = undefined
 
@@ -187,6 +191,7 @@ interpret c attrs = concat . reverse . results . execState run $ context
       run = step `untilM` isHalted
       context = VMContext { frames = [ newFrame c attrs ]
                           , stack = []
+                          , templates = M.empty
                           , results = []
                           }
 
@@ -204,12 +209,16 @@ step = do
       o <- pop
       getProperty prop o >>= push
 
-    STORE_ATTR nm  -> pop >>= setAttribute nm
+    STORE_ATTR nm  -> do
+      (VAttr a) <- pop
+      (VFrame f) <- pop
+      push (VFrame (setAttribute nm f a))
+    
     STORE_SOLE_ARG -> popPair >>= uncurry setSoleAttribute
     SET_PASS_THRU  -> setPassThrough True
     STORE_OPTION o -> undefined
     NEW tmpl       -> newTemplate tmpl >>= push
-    NEW_IND        -> pop >>= newTemplate >>= push
+    NEW_IND        -> pop >>= newTemplate . asString >>= push
     SUPER_NEW t    -> pop >>= stLookup >>= newTemplate >>= push
     WRITE          -> pop >>= writeValue
     WRITE_OPT      -> pop >>= writeValue -- FIXME: finish
@@ -317,6 +326,7 @@ interpreterTests = testGroup "Interpreter tests"
 
                    , run "store_attr 1"
                          [ LOAD_STR "hello"
+                         , NEW "blah"
                          , STORE_ATTR "foo"
                          , LOAD_STR "barf"
                          , LOAD_ATTR "foo"
