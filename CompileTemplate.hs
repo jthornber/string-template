@@ -6,6 +6,7 @@ import System.Environment
 import System.Exit
 import Text.StringTemplate.ByteCode
 import Text.StringTemplate.Compiler
+import Text.StringTemplate.Group
 import Text.Parsec
 
 usage :: IO ()
