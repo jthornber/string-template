@@ -142,7 +142,7 @@ rotMap tmpls v = undefined
 
 -- Lots of instructions have this form
 modifyTop :: (Value -> Value) -> VM ()
-modifyTop fn = pop >>= push . fn >> next
+modifyTop fn = pop >>= push . fn
 
 getProperty = undefined
 setSoleAttribute = undefined
@@ -182,28 +182,28 @@ step :: VM ()
 step = do
   i <- getInstruction
   case i of
-    LOAD_STR txt   -> push (VString txt) >> next
-    LOAD_ATTR txt  -> lookupFull txt >>= push >> next
-    LOAD_LOCAL txt -> lookupLocal txt >>= push >> next
-    LOAD_PROP prop -> undefined -- lookupFull txt >>= getProperty prop >>= push >> next
-    LOAD_PROP_IND  -> popPair >>= uncurry getProperty >>= push >> next
-    STORE_ATTR nm  -> pop >>= setAttribute nm >> next
-    STORE_SOLE_ARG -> popPair >>= uncurry setSoleAttribute >> next
-    SET_PASS_THRU  -> setPassThrough True >> next
-    STORE_OPTION o -> undefined >> next
-    NEW tmpl       -> newTemplate tmpl >>= push >> next
-    NEW_IND        -> pop >>= newTemplate >>= push >> next
-    SUPER_NEW t    -> pop >>= stLookup >>= newTemplate >>= push >> next
-    WRITE          -> pop >>= writeValue >> next
-    WRITE_OPT      -> pop >>= writeValue >> next -- FIXME: finish
-    MAP            -> popPair >>= uncurry mapAttr >> next
-    ROT_MAP        -> ((,) <$> popMany 1 <*> pop) >>= uncurry rotMap >> next -- FIXME: broken
-    PAR_MAP        -> pop >>= undefined >> next
-    BR n           -> incPC n
-    BRF n          -> pop >>= \v -> if (testAttribute $ v) then next else incPC n
-    OPTIONS        -> undefined >> next
-    LIST           -> push (VAttr . AList $ []) >> next
-    ADD            -> popPair >>= push . uncurry (consAttr) >> next
+    LOAD_STR txt   -> push (VString txt)
+    LOAD_ATTR txt  -> lookupFull txt >>= push
+    LOAD_LOCAL txt -> lookupLocal txt >>= push
+    LOAD_PROP prop -> undefined -- lookupFull txt >>= getProperty prop >>= push
+    LOAD_PROP_IND  -> popPair >>= uncurry getProperty >>= push
+    STORE_ATTR nm  -> pop >>= setAttribute nm
+    STORE_SOLE_ARG -> popPair >>= uncurry setSoleAttribute
+    SET_PASS_THRU  -> setPassThrough True
+    STORE_OPTION o -> undefined
+    NEW tmpl       -> newTemplate tmpl >>= push
+    NEW_IND        -> pop >>= newTemplate >>= push
+    SUPER_NEW t    -> pop >>= stLookup >>= newTemplate >>= push
+    WRITE          -> pop >>= writeValue
+    WRITE_OPT      -> pop >>= writeValue -- FIXME: finish
+    MAP            -> popPair >>= uncurry mapAttr
+    ROT_MAP        -> ((,) <$> popMany 1 <*> pop) >>= uncurry rotMap -- FIXME: broken
+    PAR_MAP        -> pop >>= undefined
+    BR n           -> incPC (n - 1)
+    BRF n          -> pop >>= \v -> if (testAttribute $ v) then return () else incPC (n - 1)
+    OPTIONS        -> undefined
+    LIST           -> push (VAttr . AList $ [])
+    ADD            -> popPair >>= push . uncurry (consAttr)
     TOSTR          -> modifyTop toString
     FIRST          -> modifyTop $ VAttr . head . asList
     LAST           -> modifyTop $ VAttr . head . reverse . asList
@@ -215,13 +215,14 @@ step = do
     STRLEN         -> modifyTop $ VString . show . length . asString
     REVERSE        -> modifyTop $ VAttr . AList . reverse . asList
     NOT            -> modifyTop $ notValue . testAttribute
-    OR             -> popPair >>= push . uncurry vOr >> next
-    AND            -> popPair >>= push . uncurry vAnd >> next
-    INDENT txt     -> pushIndentation txt >> next
-    DEDENT         -> popIndentation >> next
-    NEWLINE        -> undefined >> next
-    NOOP           -> next
-    POP            -> pop >> next
+    OR             -> popPair >>= push . uncurry vOr
+    AND            -> popPair >>= push . uncurry vAnd
+    INDENT txt     -> pushIndentation txt
+    DEDENT         -> popIndentation
+    NEWLINE        -> undefined
+    NOOP           -> return ()
+    POP            -> pop >> return ()
+  next
 
 ----------------------------------------------------------------
 -- Tests
