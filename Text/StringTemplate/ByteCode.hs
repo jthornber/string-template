@@ -7,7 +7,6 @@ module Text.StringTemplate.ByteCode
 import Control.Applicative
 import Data.Foldable
 import Data.Sequence (Seq)
-import Text.StringTemplate.Attribute
 
 type Code = Seq Instruction
 
