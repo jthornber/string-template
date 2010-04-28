@@ -144,7 +144,14 @@ rotMap tmpls v = undefined
 modifyTop :: (Value -> Value) -> VM ()
 modifyTop fn = pop >>= push . fn
 
-getProperty = undefined
+-- FIXME: add error handling to VM
+runtimeError :: String -> a
+runtimeError = error
+
+getProperty :: String -> Value -> VM Value
+getProperty n (VAttr (AProp m)) = return $ maybe VNull VAttr (M.lookup n m)
+getProperty _ _ = runtimeError "bad property"
+  
 setSoleAttribute = undefined
 pushIndentation = undefined
 popIndentation = undefined
@@ -157,10 +164,19 @@ toString = undefined
 asList :: Value -> [Attribute]
 asList = undefined
 
+asString :: Value -> String
+asString (VString s) = s
+asString VNull = ""
+asString (VAttr a) = asString' a
+asString (VTemplate t) = runtimeError "template can't be coerced to a string"
+
+asString' (ASimple s) = s
+asString' (AList as)  = concatMap asString' as
+asString' (AProp m)   = runtimeError "prop can't be a string" -- FIXME: check with java version
+
 trunc = undefined
 trim = undefined
 strip = undefined
-asString = undefined
 consAttr = undefined
 vOr = undefined
 vAnd = undefined
@@ -185,8 +201,8 @@ step = do
     LOAD_STR txt   -> push (VString txt)
     LOAD_ATTR txt  -> lookupFull txt >>= push
     LOAD_LOCAL txt -> lookupLocal txt >>= push
-    LOAD_PROP prop -> undefined -- lookupFull txt >>= getProperty prop >>= push
-    LOAD_PROP_IND  -> popPair >>= uncurry getProperty >>= push
+    LOAD_PROP prop -> pop >>= getProperty prop >>= push
+    LOAD_PROP_IND  -> undefined -- popPair >>= uncurry getProperty >>= push
     STORE_ATTR nm  -> pop >>= setAttribute nm
     STORE_SOLE_ARG -> popPair >>= uncurry setSoleAttribute
     SET_PASS_THRU  -> setPassThrough True
@@ -269,6 +285,23 @@ interpreterTests = testGroup "Interpreter tests"
                          , WRITE
                          ]
                          []
+                         ""
+                         
+                   , run "load_prop 1"
+                         [ LOAD_ATTR "foo"
+                         , LOAD_PROP "count"
+                         , WRITE
+                         ]
+                         [ ("foo", AProp . M.fromList $ [("count", ASimple "hello")])
+                         ]
+                         "hello"
+                   , run "load_prop 2" -- FIXME: should throw an exception?
+                         [ LOAD_ATTR "foo"
+                         , LOAD_PROP "unknown"
+                         , WRITE
+                         ]
+                         [ ("foo", AProp . M.fromList $ [("count", ASimple "hello")])
+                         ]
                          ""
                    ]
 
