@@ -3,7 +3,7 @@ module Text.StringTemplate.Attribute
 
 import Data.Map (Map)
 
-data Attribute = ASimple String
+data Attribute = AString String
                | AList [Attribute]
                | AProp (Map String Attribute)
                  deriving (Show)

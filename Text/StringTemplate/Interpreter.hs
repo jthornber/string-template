@@ -19,20 +19,14 @@ import Text.StringTemplate.ByteCode
 
 ----------------------------------------------------------------
 -- FIXME: interpreter needs a locale for the renders
-data Value = VString String
-           | VNull
-           | VAttr Attribute
-           | VTemplate Code
-             deriving (Show)
+type Value = Maybe Attribute
 
 showValue :: Value -> String
-showValue (VString s) = s
-showValue VNull = ""
-showValue (VAttr a) = showAttr a
-showValue (VTemplate _) = "<template code, arrrggg>"
+showValue Nothing = ""
+showValue (Just a) = showAttr a
 
 showAttr :: Attribute -> String
-showAttr (ASimple s) = s
+showAttr (AString s) = s
 showAttr (AList xs) = concatMap showAttr xs
 showAttr (AProp m) = "<properties here>" -- FIXME: finish
 
@@ -117,13 +111,13 @@ popMany n = (:) <$> pop <*> popMany (n - 1)
 lookupFull :: String -> VM Value
 lookupFull nm = (lookup' . frames) <$> get
     where
-      lookup' [] = VNull
-      lookup' (f:fs) = maybe (lookup' fs) VAttr (M.lookup nm (attrs f))
+      lookup' [] = Nothing
+      lookup' (f:fs) = maybe (lookup' fs) Just (M.lookup nm (attrs f))
 
 lookupLocal :: String -> VM Value
 lookupLocal nm = lookup' <$> topFrame
     where
-      lookup' = maybe VNull VAttr . M.lookup nm . attrs
+      lookup' = M.lookup nm . attrs
 
 setAttribute :: String -> Value -> VM ()
 setAttribute = undefined -- nm templ v = undefined
@@ -149,7 +143,7 @@ runtimeError :: String -> a
 runtimeError = error
 
 getProperty :: String -> Value -> VM Value
-getProperty n (VAttr (AProp m)) = return $ maybe VNull VAttr (M.lookup n m)
+getProperty n (Just (AProp m)) = return (M.lookup n m)
 getProperty _ _ = runtimeError "bad property"
   
 setSoleAttribute = undefined
@@ -162,15 +156,15 @@ stLookup = undefined
 toString = undefined
 
 asList :: Value -> [Attribute]
-asList = undefined
+asList Nothing = []
+asList (Just (AList as)) = as
+asList _ = runtimeError "what do we do here ?"
 
 asString :: Value -> String
-asString (VString s) = s
-asString VNull = ""
-asString (VAttr a) = asString' a
-asString (VTemplate t) = runtimeError "template can't be coerced to a string"
+asString Nothing = ""
+asString (Just a) = asString' a
 
-asString' (ASimple s) = s
+asString' (AString s) = s
 asString' (AList as)  = concatMap asString' as
 asString' (AProp m)   = runtimeError "prop can't be a string" -- FIXME: check with java version
 
@@ -198,11 +192,14 @@ step :: VM ()
 step = do
   i <- getInstruction
   case i of
-    LOAD_STR txt   -> push (VString txt)
+    LOAD_STR txt   -> push (Just $ AString txt)
     LOAD_ATTR txt  -> lookupFull txt >>= push
     LOAD_LOCAL txt -> lookupLocal txt >>= push
     LOAD_PROP prop -> pop >>= getProperty prop >>= push
-    LOAD_PROP_IND  -> undefined -- popPair >>= uncurry getProperty >>= push
+    LOAD_PROP_IND  -> do
+      (Just (AString prop)) <- pop
+      o <- pop
+      getProperty prop o >>= push
     STORE_ATTR nm  -> pop >>= setAttribute nm
     STORE_SOLE_ARG -> popPair >>= uncurry setSoleAttribute
     SET_PASS_THRU  -> setPassThrough True
@@ -218,18 +215,18 @@ step = do
     BR n           -> incPC (n - 1)
     BRF n          -> pop >>= \v -> if (testAttribute $ v) then return () else incPC (n - 1)
     OPTIONS        -> undefined
-    LIST           -> push (VAttr . AList $ [])
+    LIST           -> push (Just . AList $ [])
     ADD            -> popPair >>= push . uncurry (consAttr)
     TOSTR          -> modifyTop toString
-    FIRST          -> modifyTop $ VAttr . head . asList
-    LAST           -> modifyTop $ VAttr . head . reverse . asList
-    REST           -> modifyTop $ VAttr . AList . tail . asList
+    FIRST          -> modifyTop $ Just . head . asList
+    LAST           -> modifyTop $ Just . head . reverse . asList
+    REST           -> modifyTop $ Just . AList . tail . asList
     TRUNC          -> modifyTop trunc
     STRIP          -> modifyTop strip
     TRIM           -> modifyTop trim
-    LENGTH         -> modifyTop $ VString . show . length . asList
-    STRLEN         -> modifyTop $ VString . show . length . asString
-    REVERSE        -> modifyTop $ VAttr . AList . reverse . asList
+    LENGTH         -> modifyTop $ Just . AString . show . length . asList
+    STRLEN         -> modifyTop $ Just . AString . show . length . asString
+    REVERSE        -> modifyTop $ Just . AList . reverse . asList
     NOT            -> modifyTop $ notValue . testAttribute
     OR             -> popPair >>= push . uncurry vOr
     AND            -> popPair >>= push . uncurry vAnd
@@ -264,7 +261,7 @@ interpreterTests = testGroup "Interpreter tests"
                          [ LOAD_ATTR "foo"
                          , WRITE
                          ]
-                         [ ("foo", ASimple "hello") ]
+                         [ ("foo", AString "hello") ]
                          "hello"
                    , run "load_attr 2"
                          [ LOAD_ATTR "foo"
@@ -278,7 +275,7 @@ interpreterTests = testGroup "Interpreter tests"
                          [ LOAD_LOCAL "foo"
                          , WRITE
                          ]
-                         [ ("foo", ASimple "hello") ]
+                         [ ("foo", AString "hello") ]
                          "hello"
                    , run "load_local 2"
                          [ LOAD_LOCAL "foo"
@@ -292,7 +289,7 @@ interpreterTests = testGroup "Interpreter tests"
                          , LOAD_PROP "count"
                          , WRITE
                          ]
-                         [ ("foo", AProp . M.fromList $ [("count", ASimple "hello")])
+                         [ ("foo", AProp . M.fromList $ [("count", AString "hello")])
                          ]
                          "hello"
                    , run "load_prop 2" -- FIXME: should throw an exception?
@@ -300,9 +297,19 @@ interpreterTests = testGroup "Interpreter tests"
                          , LOAD_PROP "unknown"
                          , WRITE
                          ]
-                         [ ("foo", AProp . M.fromList $ [("count", ASimple "hello")])
+                         [ ("foo", AProp . M.fromList $ [("count", AString "hello")])
                          ]
                          ""
+                         
+                   , run "load_prop_ind 1"
+                         [ LOAD_ATTR "foo"
+                         , LOAD_STR "count"
+                         , LOAD_PROP_IND
+                         , WRITE
+                         ]
+                         [ ("foo", AProp . M.fromList $ [("count", AString "hello")])
+                         ]
+                         "hello"
                    ]
 
 
