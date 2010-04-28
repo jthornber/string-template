@@ -5,9 +5,11 @@ module Text.StringTemplate.Interpreter
 import Control.Applicative
 import Control.Monad.Loops
 import Control.Monad.State.Strict
+
+import Data.Foldable (fold)
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Sequence (Seq)
+import Data.Sequence (Seq, (|>))
 import qualified Data.Sequence as S
 
 import Test.Framework (testGroup, Test)
@@ -24,10 +26,15 @@ data Value = VNull
            | VFrame VMFrame
              deriving (Show)
 
-showValue :: Value -> String
-showValue VNull = ""
-showValue (VAttr a) = showAttr a
-showValue (VFrame _) = "<frame>"
+showValue :: Value -> VM String
+showValue VNull = return ""
+showValue (VAttr a) = return $ showAttr a
+showValue (VFrame f) = do
+  c <- get
+  put $ c { frames = f : frames c }
+  interp'
+  put c
+
 
 showAttr :: Attribute -> String
 showAttr (AString s) = s
@@ -39,6 +46,7 @@ data VMFrame = VMFrame
     , programCounter :: Int
     , instructions :: Code
     , passThrough :: Bool
+    , results :: Seq String
     } deriving (Show)
 
 newFrame :: Code -> [(String, Attribute)] -> VMFrame
@@ -46,13 +54,13 @@ newFrame c a = VMFrame { attrs = M.fromList a
                        , programCounter = 0
                        , instructions = c
                        , passThrough = False
+                       , results = S.empty
                        }
 
 data VMContext = VMContext
     { frames :: [VMFrame]
     , stack :: [Value]
     , templates :: Map String Code
-    , results :: [String]
     }
 
 -- FIXME: Use WriterT for output
@@ -127,7 +135,9 @@ setPassThrough :: Bool -> VM ()
 setPassThrough b = modifyTopFrame $ \f -> f { passThrough = b }
 
 writeValue :: Value -> VM ()
-writeValue v = modify $ \c -> c { results = showValue v : results c }
+writeValue v = do
+  txt <- showValue v
+  modifyTopFrame $ \f -> f { results = results f |> txt }
 
 mapAttr :: Value -> Value -> VM ()
 mapAttr attr templ = undefined
@@ -186,13 +196,12 @@ vAnd = undefined
 
 -- FIXME: make this return an Either, there must be error conditions
 interpret :: Code -> [(String, Attribute)] -> String
-interpret c attrs = concat . reverse . results . execState run $ context
+interpret c attrs = fold . S.viewl . results . head . frames . execState run $ context
     where
       run = step `untilM` isHalted
       context = VMContext { frames = [ newFrame c attrs ]
                           , stack = []
                           , templates = M.empty
-                          , results = []
                           }
 
 -- FIXME: we need some cast operators like asString, asInt, asAttr etc.
