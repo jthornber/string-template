@@ -31,16 +31,14 @@ showAttr (AList xs) = concatMap showAttr xs
 showAttr (AProp m) = "<properties here>" -- FIXME: finish
 
 data VMFrame = VMFrame
-    { halted :: Bool            -- FIXME: I don't think this should be here
-    , attrs :: Map String Attribute
+    { attrs :: Map String Attribute
     , programCounter :: Int
     , instructions :: Code
     , passThrough :: Bool
     }
 
 newFrame :: Code -> [(String, Attribute)] -> VMFrame
-newFrame c a = VMFrame { halted = False
-                       , attrs = M.fromList a
+newFrame c a = VMFrame { attrs = M.fromList a
                        , programCounter = 0
                        , instructions = c
                        , passThrough = False
@@ -144,7 +142,7 @@ runtimeError = error
 getProperty :: String -> Value -> VM Value
 getProperty n (Just (AProp m)) = return (M.lookup n m)
 getProperty _ _ = runtimeError "bad property"
-  
+
 setSoleAttribute = undefined
 pushIndentation = undefined
 popIndentation = undefined
@@ -200,6 +198,7 @@ step = do
       (Just (AString prop)) <- pop
       o <- pop
       getProperty prop o >>= push
+
     STORE_ATTR nm  -> pop >>= setAttribute nm
     STORE_SOLE_ARG -> popPair >>= uncurry setSoleAttribute
     SET_PASS_THRU  -> setPassThrough True
@@ -283,7 +282,7 @@ interpreterTests = testGroup "Interpreter tests"
                          ]
                          []
                          ""
-                         
+
                    , run "load_prop 1"
                          [ LOAD_ATTR "foo"
                          , LOAD_PROP "count"
@@ -300,7 +299,7 @@ interpreterTests = testGroup "Interpreter tests"
                          [ ("foo", AProp . M.fromList $ [("count", AString "hello")])
                          ]
                          ""
-                         
+
                    , run "load_prop_ind 1"
                          [ LOAD_ATTR "foo"
                          , LOAD_STR "count"
@@ -310,7 +309,7 @@ interpreterTests = testGroup "Interpreter tests"
                          [ ("foo", AProp . M.fromList $ [("count", AString "hello")])
                          ]
                          "hello"
-                         
+
                    , run "store_attr 1"
                          [ LOAD_STR "hello"
                          , STORE_ATTR "foo"
