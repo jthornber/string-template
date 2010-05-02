@@ -32,9 +32,9 @@ showValue (VAttr a) = return $ showAttr a
 showValue (VFrame f) = do
   c <- get
   put $ c { frames = f : frames c }
-  interp'
+  r <- interp'
   put c
-
+  return r
 
 showAttr :: Attribute -> String
 showAttr (AString s) = s
@@ -196,13 +196,19 @@ vAnd = undefined
 
 -- FIXME: make this return an Either, there must be error conditions
 interpret :: Code -> [(String, Attribute)] -> String
-interpret c attrs = fold . S.viewl . results . head . frames . execState run $ context
+interpret c attrs = evalState interp' context
     where
-      run = step `untilM` isHalted
       context = VMContext { frames = [ newFrame c attrs ]
                           , stack = []
                           , templates = M.empty
                           }
+
+-- | Interprets the current frame (template)
+interp' :: VM String
+interp' = extractResult <$> (run *> get)
+    where
+      run = step `untilM` isHalted
+      extractResult = fold . S.viewl . results . head . frames
 
 -- FIXME: we need some cast operators like asString, asInt, asAttr etc.
 step :: VM ()
@@ -334,8 +340,8 @@ interpreterTests = testGroup "Interpreter tests"
                          "hello"
 
                    , run "store_attr 1"
-                         [ LOAD_STR "hello"
-                         , NEW "blah"
+                         [ NEW "blah"
+                         , LOAD_STR "hello"
                          , STORE_ATTR "foo"
                          , LOAD_STR "barf"
                          , LOAD_ATTR "foo"
