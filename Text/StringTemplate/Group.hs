@@ -16,28 +16,12 @@ import Text.Parsec hiding ((<|>))
 import Text.Parsec.Char
 import Text.Parsec.String
 
+import Text.StringTemplate.AST
 import Text.StringTemplate.ByteCode
 import Text.StringTemplate.Compiler
 import Text.StringTemplate.ParserUtils
 
 ----------------------------------------------------------------
-
-data Dictionary = Dictionary { pairs :: [(String, String)]
-                             , defaultValue :: Maybe String
-                             } deriving (Show)
-
-data FormalArg = FormalArg String (Maybe String) deriving (Show)
-
-data TemplateDef = TemplateDef { name :: String
-                               , args :: [FormalArg]
-                               , instructions :: Code
-                               } deriving (Show)
-
-data DictionaryDef = DictionaryDef String Dictionary deriving (Show)
-
-data Definition = DTemplate TemplateDef
-                | DDictionary DictionaryDef
-                  deriving (Show)
 
 group :: Parser [Definition]
 group = optional whiteSpace *> many1 (lexeme def)
