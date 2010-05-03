@@ -12,8 +12,6 @@ import Control.Applicative hiding (many, optional)
 import Data.Map (Map)
 import qualified Data.Map as M
 
-import Debug.Trace
-
 import Text.Parsec hiding ((<|>))
 import Text.Parsec.Char
 import Text.Parsec.String
@@ -21,7 +19,7 @@ import Text.Parsec.String
 import Text.StringTemplate.ByteCode
 import Text.StringTemplate.Compiler
 
-traceIt x = trace (show x) x
+----------------------------------------------------------------
 
 data Dictionary = Dictionary { pairs :: [(String, String)]
                              , defaultValue :: Maybe String
