@@ -24,11 +24,8 @@ data ParseState = ParseState {
     }
 type Parser = Parsec String ParseState
 
-discard :: Parser a -> Parser ()
-discard p = p >> return ()
-
-dchar :: Char -> Parser ()
-dchar = discard . lexeme . char
+dchar :: Char -> Parser Char
+dchar = lexeme . char
 
 concatSeq :: [Seq a] -> Seq a
 concatSeq = foldr (><) S.empty
@@ -85,13 +82,13 @@ parens = brak '(' ')'
 braces :: Parser a -> Parser a
 braces = brak '{' '}'
 
-literal :: String -> Parser ()
-literal = discard . lexeme . string
+literal :: String -> Parser String
+literal = lexeme . string
 
-ellipsis :: Parser ()
+ellipsis :: Parser String
 ellipsis = literal "..."
 
-equals :: Parser ()
+equals :: Parser Char
 equals = dchar '='
 
 keywords :: [String]
@@ -108,8 +105,8 @@ identifier = do
       idLetter = from [['a'..'z'], ['A'..'Z'], ['0'..'9'], "_/"]
       from = oneOf . concat
 
-lineEnd :: Parser ()
-lineEnd = dchar '\n' <|> (char '\r' *> dchar '\n')
+lineEnd :: Parser String
+lineEnd = string "\n" <|> string "\r\n"
 
 stString :: Parser String
 stString = char '"' *> manyTill (escapedChar <|> noneOf "\"") (try $ char '"')
@@ -121,13 +118,13 @@ stString = char '"' *> manyTill (escapedChar <|> noneOf "\"") (try $ char '"')
       decode 't' = '\t'
       decode c   = c
 
-comma :: Parser ()
+comma :: Parser Char
 comma = dchar ','
 
-colon :: Parser ()
+colon :: Parser Char
 colon = dchar ':'
 
-dot :: Parser ()
+dot :: Parser Char
 dot = dchar '.'
 
 ----------------------------------------------------------------

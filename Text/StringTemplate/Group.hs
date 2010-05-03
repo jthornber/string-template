@@ -117,30 +117,26 @@ anonymousTemplate = concat <$> (char '{' *> manyTill charOrBraces (char '}'))
   where
     charOrBraces = (many1 $ noneOf "{") <|> anonymousTemplate
 
-comment :: Parser ()
-comment = discard comment' <?> "comment"
+comment :: Parser String
+comment = comment' <?> "comment"
   where
     comment' = string "/*" *> manyTill anyChar (try $ string "*/")
 
-lineComment :: Parser ()
-lineComment = discard comment' <?> "line comment"
+lineComment :: Parser String
+lineComment = comment' <?> "line comment"
   where
-    comment' = discard (string "//" *> manyTill anyChar (try (discard newline) <|> eof))
+    comment' = string "//" *> manyTill anyChar (try (newline *> return () <|> eof))
+newLine :: Parser String
+newLine = ((try $ string "\r\n") <|> (string "\n"))
 
-newLine :: Parser ()
-newLine = ((try $ discard . string $ "\r\n") <|> (discard $ char '\n'))
+whiteSpace :: Parser String
+whiteSpace = (many1 (oneOf " \r\t\n")) <?> "whitespace"
 
-whiteSpace :: Parser ()
-whiteSpace = (discard $ many1 (oneOf " \r\t\n")) <?> "whitespace"
+restOfLine :: Parser String
+restOfLine = many (oneOf " \r") <* char '\n'
 
-restOfLine :: Parser ()
-restOfLine = discard (many (oneOf " \r") *> char '\n')
-
-discard :: Parser a -> Parser ()
-discard p = p >> return ()
-
-is :: Parser ()
-is = discard (lexeme $ string "::=")
+is :: Parser String
+is = lexeme $ string "::="
 
 dchar :: Char -> Parser ()
 dchar c = lexeme (char c) *> return ()
