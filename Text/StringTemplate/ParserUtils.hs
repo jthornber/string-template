@@ -14,6 +14,7 @@ module Text.StringTemplate.ParserUtils
        , ellipsis
        , lexeme
        , whiteSpace
+       , lineEnd
        ) where
 
 import Control.Applicative hiding (optional, many)
@@ -59,4 +60,8 @@ lexeme p = p <* optional whiteSpace
 -- FIXME: whiteSpace is different for groups and templates ?
 whiteSpace :: (Stream s m Char) => ParsecT s u m String
 whiteSpace = (many (oneOf " \r\t\n")) <?> "whitespace"
+
+lineEnd :: (Stream s m Char) => ParsecT s u m String
+lineEnd = string "\n" <|> string "\r\n"
+
 

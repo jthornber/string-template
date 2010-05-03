@@ -63,9 +63,6 @@ identifier = do
       idLetter = from [['a'..'z'], ['A'..'Z'], ['0'..'9'], "_/"]
       from = oneOf . concat
 
-lineEnd :: Parser String
-lineEnd = string "\n" <|> string "\r\n"
-
 stString :: Parser String
 stString = char '"' *> manyTill (escapedChar <|> noneOf "\"") (try $ char '"')
     where
