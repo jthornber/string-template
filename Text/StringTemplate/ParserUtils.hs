@@ -7,6 +7,11 @@ module Text.StringTemplate.ParserUtils
        , colon
        , dot
        , brak
+       , squares
+       , parens
+       , braces
+       , literal
+       , ellipsis
        , lexeme
        , whiteSpace
        ) where
@@ -32,6 +37,21 @@ dot = dchar '.'
 
 brak :: (Stream s m Char) => Char -> Char -> ParsecT s u m a -> ParsecT s u m a
 brak b e p = dchar b *> p <* dchar e
+
+squares :: (Stream s m Char) => ParsecT s u m a -> ParsecT s u m a
+squares = brak '[' ']'
+
+parens :: (Stream s m Char) => ParsecT s u m a -> ParsecT s u m a
+parens = brak '(' ')'
+
+braces :: (Stream s m Char) => ParsecT s u m a -> ParsecT s u m a
+braces = brak '{' '}'
+
+literal :: (Stream s m Char) => String -> ParsecT s u m String
+literal = lexeme . string
+
+ellipsis :: (Stream s m Char) => ParsecT s u m String
+ellipsis = literal "..."
 
 lexeme :: (Stream s m Char) => ParsecT s u m a -> ParsecT s u m a
 lexeme p = p <* optional whiteSpace

@@ -28,18 +28,6 @@ type Parser = Parsec String ParseState
 concatSeq :: [Seq a] -> Seq a
 concatSeq = foldr (><) S.empty
 
--- FIXME: This really seems like overkill, how many times do we find
-intern :: String -> Parser String
-intern txt = do
-  ps <- getState
-  case M.lookup txt (stringMap ps) of
-    Nothing ->
-        let val = txt in
-        do setState (ps { stringMap = M.insert txt val (stringMap ps)})
-           return val
-
-    Just x  -> return x
-
 pushFrame :: [String] -> Parser ()
 pushFrame = undefined
 
@@ -60,21 +48,6 @@ rdelim = '>'
 
 delimit :: Parser a -> Parser a
 delimit = brak ldelim rdelim
-
-squares :: Parser a -> Parser a
-squares = brak '[' ']'
-
-parens :: Parser a -> Parser a
-parens = brak '(' ')'
-
-braces :: Parser a -> Parser a
-braces = brak '{' '}'
-
-literal :: String -> Parser String
-literal = lexeme . string
-
-ellipsis :: Parser String
-ellipsis = literal "..."
 
 keywords :: [String]
 keywords = ["if", "else", "elseif", "endif", "super"]
