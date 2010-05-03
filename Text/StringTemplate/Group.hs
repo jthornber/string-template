@@ -138,16 +138,16 @@ restOfLine = many (oneOf " \r") <* char '\n'
 is :: Parser String
 is = lexeme $ string "::="
 
-dchar :: Char -> Parser ()
-dchar c = lexeme (char c) *> return ()
+dchar :: Char -> Parser Char
+dchar c = lexeme (char c)
 
-comma :: Parser ()
+comma :: Parser Char
 comma = dchar ','
 
-equals :: Parser ()
+equals :: Parser Char
 equals = dchar '='
 
-colon :: Parser ()
+colon :: Parser Char
 colon = dchar ':'
 
 brak :: Char -> Char -> Parser a -> Parser a
