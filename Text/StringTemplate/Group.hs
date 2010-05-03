@@ -18,6 +18,7 @@ import Text.Parsec.String
 
 import Text.StringTemplate.ByteCode
 import Text.StringTemplate.Compiler
+import Text.StringTemplate.ParserUtils
 
 ----------------------------------------------------------------
 
@@ -127,29 +128,9 @@ lineComment = comment' <?> "line comment"
 newLine :: Parser String
 newLine = ((try $ string "\r\n") <|> (string "\n"))
 
-whiteSpace :: Parser String
-whiteSpace = (many1 (oneOf " \r\t\n")) <?> "whitespace"
-
 restOfLine :: Parser String
 restOfLine = many (oneOf " \r") <* char '\n'
 
 is :: Parser String
 is = lexeme $ string "::="
 
-dchar :: Char -> Parser Char
-dchar c = lexeme (char c)
-
-comma :: Parser Char
-comma = dchar ','
-
-equals :: Parser Char
-equals = dchar '='
-
-colon :: Parser Char
-colon = dchar ':'
-
-brak :: Char -> Char -> Parser a -> Parser a
-brak b e p = dchar b *> p <* dchar e
-
-lexeme :: Parser a -> Parser a
-lexeme p = p <* optional whiteSpace
