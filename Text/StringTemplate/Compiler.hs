@@ -12,6 +12,7 @@ import Control.Applicative hiding (many, (<|>), optional)
 import Text.Parsec
 
 import Text.StringTemplate.ByteCode (Instruction (..), Code)
+import Text.StringTemplate.ParserUtils
 
 import Test.Framework (testGroup, Test)
 import Test.Framework.Providers.HUnit
@@ -23,9 +24,6 @@ data ParseState = ParseState {
       stringMap :: Map String String
     }
 type Parser = Parsec String ParseState
-
-dchar :: Char -> Parser Char
-dchar = lexeme . char
 
 concatSeq :: [Seq a] -> Seq a
 concatSeq = foldr (><) S.empty
@@ -54,21 +52,11 @@ lookupFunction _ = return S.empty
 ----------------------------------------------------------------
 -- Lexer
 
--- FIXME: don't consume '\n' or '\r' as these need to be left to spot line endings
-whiteSpace :: Parser String
-whiteSpace = many . oneOf $ " \t\n\r"
-
-lexeme :: Parser a -> Parser a
-lexeme p = p <* whiteSpace
-
 ldelim :: Char
 ldelim = '<'
 
 rdelim :: Char
 rdelim = '>'
-
-brak :: Char -> Char -> Parser a -> Parser a
-brak l r = between (dchar l) (dchar r)
 
 delimit :: Parser a -> Parser a
 delimit = brak ldelim rdelim
@@ -87,9 +75,6 @@ literal = lexeme . string
 
 ellipsis :: Parser String
 ellipsis = literal "..."
-
-equals :: Parser Char
-equals = dchar '='
 
 keywords :: [String]
 keywords = ["if", "else", "elseif", "endif", "super"]
@@ -117,15 +102,6 @@ stString = char '"' *> manyTill (escapedChar <|> noneOf "\"") (try $ char '"')
       decode 'r' = '\r'
       decode 't' = '\t'
       decode c   = c
-
-comma :: Parser Char
-comma = dchar ','
-
-colon :: Parser Char
-colon = dchar ':'
-
-dot :: Parser Char
-dot = dchar '.'
 
 ----------------------------------------------------------------
 -- Parser
